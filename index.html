@@ -228,9 +228,8 @@
                         filteredData = data.filter(row => getFinancialYear(row["Month-Year"]) === fy);
                     }
 
-                    // Sort filteredData in descending order of Month-Year
-                    filteredData = filteredData.slice().sort((a, b) => {
-                        // Parse "Month-Year" to Date for comparison
+                    // Sort filteredData in descending order for the table only
+                    const filteredDataDesc = filteredData.slice().sort((a, b) => {
                         const parseMY = (my) => {
                             if (!my) return new Date(0);
                             const [monthStr, yearStr] = my.split(' ');
@@ -253,6 +252,7 @@
                         return defaultValue;
                     };
 
+                    // For charts, use original (chronological) order
                     const labels = filteredData.map(row => row["Month-Year"] || 'N/A');
                     const valuations = filteredData.map((row, index) => safeGetNumber(row, "Portfolio Valuation (In ₹)"));
                     const investments = filteredData.map((row, index) => safeGetNumber(row, "Total Investment"));
@@ -305,15 +305,17 @@
                         return `<td class="${className}">${formattedValue}</td>`;
                     };
 
-                    filteredData.forEach((row, index) => {
+                    // Use descending order for table rows
+                    filteredDataDesc.forEach((row) => {
+                        const idx = filteredData.findIndex(r => r["Month-Year"] === row["Month-Year"]);
                         const tr = document.createElement("tr");
                         tr.innerHTML = `
                             <td>${row["Month-Year"] || '--'}</td>
-                            ${formatTableCell(valuations[index])}
-                            ${formatTableCell(changes[index])}
-                            ${formatTableCell(monthlyInvestments[index])}
-                            ${formatTableCell(gains[index])}
-                            ${formatTableCell(investments[index])}
+                            ${formatTableCell(valuations[idx])}
+                            ${formatTableCell(changes[idx])}
+                            ${formatTableCell(monthlyInvestments[idx])}
+                            ${formatTableCell(gains[idx])}
+                            ${formatTableCell(investments[idx])}
                         `;
                         tbody.appendChild(tr);
                     });
