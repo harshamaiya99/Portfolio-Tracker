@@ -112,6 +112,15 @@
 
     <h1>Investment Portfolio Overview</h1>
 
+    <!-- Financial Year Dropdown -->
+    <div style="text-align:center; margin-bottom: 20px;">
+        <label for="fySelect"><b>Period:</b></label>
+        <select id="fySelect">
+            <option value="last12">Last 12 Months</option>
+            <!-- Options will be appended by JS if needed -->
+        </select>
+    </div>
+
     <div class="cards">
         <div class="card">
             <h4>CURRENT VALUE</h4>
@@ -154,6 +163,21 @@
     <script>
         console.log("Script started."); // Check if script runs
 
+        // Helper to get FY string for a given month-year (e.g., "Apr 2024" => "2024-25")
+        function getFinancialYear(monthYear) {
+            if (!monthYear) return "Unknown";
+            const [monthStr, yearStr] = monthYear.split(' ');
+            const year = parseInt(yearStr, 10);
+            const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+            const monthIdx = months.findIndex(m => m.toLowerCase() === monthStr.toLowerCase());
+            if (monthIdx === -1 || isNaN(year)) return "Unknown";
+            if (monthIdx >= 3) {
+                return `${year}-${(year+1).toString().slice(-2)}`;
+            } else {
+                return `${year-1}-${year.toString().slice(-2)}`;
+            }
+        }
+
         fetch("portfolio.csv") // Ensure this path is correct
             .then(response => {
                 console.log("Fetch response status:", response.status); // Check fetch status
@@ -182,127 +206,137 @@
                     return;
                 }
 
-                // --- Data Extraction and Validation ---
-                const safeGetNumber = (row, key, defaultValue = 0) => {
-                    const value = row ? row[key] : undefined;
-                    // Check if PapaParse already typed it as number
-                    if (typeof value === 'number' && !isNaN(value)) return value;
-                    // Attempt manual parse if it's a string
-                    if (typeof value === 'string') {
-                        const parsed = parseFloat(value.replace(/[^0-9.-]+/g, '')); // Remove currency/commas etc.
-                        return isNaN(parsed) ? defaultValue : parsed;
-                    }
-                    return defaultValue; // Return default for other types or undefined
-                };
-
-                const labels = data.map(row => row["Month-Year"] || 'N/A');
-                const valuations = data.map((row, index) => safeGetNumber(row, "Portfolio Valuation (In ₹)"));
-                const investments = data.map((row, index) => safeGetNumber(row, "Total Investment"));
-                const gains = data.map((row, index) => safeGetNumber(row, "Gain/Loss"));
-                const changes = data.map((row, index) => safeGetNumber(row, "Changes in ₹"));
-                const monthlyInvestments = data.map((row, index) => safeGetNumber(row, "Amt Invested"));
-
-
-                // --- Summary Calculation ---
-                const currentValue = valuations[valuations.length - 1];
-                const totalInvested = investments[investments.length - 1];
-                const overallGain = currentValue - totalInvested;
-                const returnPercent = totalInvested !== 0 && !isNaN(totalInvested) ? (overallGain / totalInvested * 100).toFixed(2) : "0.00";
-
-                console.log("Calculated Summary:", { currentValue, totalInvested, overallGain, returnPercent }); // Log summary values
-
-                // --- Update Summary Cards ---
-                const formatCurrency = (value) => {
-                    const num = Number(value);
-                    if (isNaN(num)) return '₹ --';
-                    return `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-                };
-
-                const currentValueElement = document.getElementById("currentValue");
-                const totalInvestedElement = document.getElementById("totalInvested");
-                const gainLossElement = document.getElementById("gainLoss");
-                const returnPercentElement = document.getElementById("returnPercent");
-
-                currentValueElement.textContent = formatCurrency(currentValue);
-                totalInvestedElement.textContent = formatCurrency(totalInvested);
-                gainLossElement.textContent = formatCurrency(overallGain);
-                returnPercentElement.textContent = `${returnPercent}%`;
-
-                // Apply negative class to Current Value if needed
-                currentValueElement.classList.remove('positive', 'negative');
-                if (currentValue < totalInvested) {
-                    console.log("Applying 'negative' to Current Value");
-                    currentValueElement.classList.add('negative');
-                } else {
-                    console.log("Current Value is not negative relative to Total Invested");
-                     // currentValueElement.classList.add('positive'); // Optional positive styling
-                }
-
-                // Apply classes for Gain/Loss and Return %
-                gainLossElement.classList.remove('positive', 'negative');
-                gainLossElement.classList.add(overallGain >= 0 ? "positive" : "negative");
-                console.log(`Applying '${overallGain >= 0 ? "positive" : "negative"}' to Gain/Loss`);
-
-                returnPercentElement.classList.remove('positive', 'negative');
-                returnPercentElement.classList.add(Number(returnPercent) >= 0 ? "positive" : "negative");
-                console.log(`Applying '${Number(returnPercent) >= 0 ? "positive" : "negative"}' to Return Percent`);
-
-
-                // --- Populate Table ---
-                const tbody = document.querySelector("table tbody");
-                tbody.innerHTML = ""; // Clear existing rows
-
-                const formatTableCell = (value) => {
-                    const num = Number(value); // Ensure we compare numbers
-                    if (isNaN(num)) {
-                        return `<td>--</td>`; // Handle non-numeric data
-                    }
-                    const formattedValue = num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                    const className = num < 0 ? 'negative' : '';
-                    if(num < 0) console.log(`Applying 'negative' to table cell value: ${num}`); // Log when applying negative class in table
-                    return `<td class="${className}">${formattedValue}</td>`;
-                };
-
-                data.forEach((row, index) => {
-                    const tr = document.createElement("tr");
-                    tr.innerHTML = `
-                        <td>${row["Month-Year"] || '--'}</td>
-                        ${formatTableCell(valuations[index])}
-                        ${formatTableCell(changes[index])}
-                        ${formatTableCell(monthlyInvestments[index])}
-                        ${formatTableCell(gains[index])}
-                        ${formatTableCell(investments[index])}
-                    `;
-                    tbody.appendChild(tr);
+                // --- Financial Year Dropdown Setup ---
+                const fySet = new Set();
+                data.forEach(row => {
+                    fySet.add(getFinancialYear(row["Month-Year"]));
                 });
-                console.log("Table populated.");
+                const fyList = Array.from(fySet).filter(fy => fy !== "Unknown").sort().reverse();
 
-                // --- Create Charts ---
-                 // (Keep the Chart.js code from the previous version, including try/catch block)
-                 try {
-                    new Chart(document.getElementById('valuationChart'), {
-                      type: 'line',
-                      data: { labels, datasets: [ { label: 'Portfolio Valuation (₹)', data: valuations, borderColor: '#28a745', backgroundColor: 'rgba(40,167,69,0.2)', tension: 0.3 }, { label: 'Total Investment (₹)', data: investments, borderColor: '#007bff', backgroundColor: 'rgba(0,123,255,0.2)', tension: 0.3 } ] },
-                      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: context => `${context.dataset.label || ''}: ${formatCurrency(context.parsed.y)}` } } }, scales: { y: { ticks: { callback: value => formatCurrency(value) } } } }
+                const fySelect = document.getElementById("fySelect");
+                // Always keep "Last 12 Months" as the first option
+                fySelect.innerHTML = `<option value="last12">Last 12 Months</option>` +
+                    fyList.map(fy => `<option value="${fy}">${fy}</option>`).join('');
+                let selectedFY = "last12";
+
+                // --- Main Render Function (filtered by FY or last 12 months) ---
+                function renderPortfolioForFY(fy) {
+                    let filteredData;
+                    if (fy === "last12") {
+                        // Show last 12 months from the data
+                        filteredData = data.slice(-12);
+                    } else {
+                        // Show only the months that belong to the selected FY (no last-12 logic for FY selection)
+                        filteredData = data.filter(row => getFinancialYear(row["Month-Year"]) === fy);
+                    }
+
+                    const safeGetNumber = (row, key, defaultValue = 0) => {
+                        const value = row ? row[key] : undefined;
+                        if (typeof value === 'number' && !isNaN(value)) return value;
+                        if (typeof value === 'string') {
+                            const parsed = parseFloat(value.replace(/[^0-9.-]+/g, ''));
+                            return isNaN(parsed) ? defaultValue : parsed;
+                        }
+                        return defaultValue;
+                    };
+
+                    const labels = filteredData.map(row => row["Month-Year"] || 'N/A');
+                    const valuations = filteredData.map((row, index) => safeGetNumber(row, "Portfolio Valuation (In ₹)"));
+                    const investments = filteredData.map((row, index) => safeGetNumber(row, "Total Investment"));
+                    const gains = filteredData.map((row, index) => safeGetNumber(row, "Gain/Loss"));
+                    const changes = filteredData.map((row, index) => safeGetNumber(row, "Changes in ₹"));
+                    const monthlyInvestments = filteredData.map((row, index) => safeGetNumber(row, "Amt Invested"));
+
+                    const currentValue = valuations[valuations.length - 1];
+                    const totalInvested = investments[investments.length - 1];
+                    const overallGain = currentValue - totalInvested;
+                    const returnPercent = totalInvested !== 0 && !isNaN(totalInvested) ? (overallGain / totalInvested * 100).toFixed(2) : "0.00";
+
+                    const formatCurrency = (value) => {
+                        const num = Number(value);
+                        if (isNaN(num)) return '₹ --';
+                        return `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                    };
+
+                    const currentValueElement = document.getElementById("currentValue");
+                    const totalInvestedElement = document.getElementById("totalInvested");
+                    const gainLossElement = document.getElementById("gainLoss");
+                    const returnPercentElement = document.getElementById("returnPercent");
+
+                    currentValueElement.textContent = formatCurrency(currentValue);
+                    totalInvestedElement.textContent = formatCurrency(totalInvested);
+                    gainLossElement.textContent = formatCurrency(overallGain);
+                    returnPercentElement.textContent = `${returnPercent}%`;
+
+                    currentValueElement.classList.remove('positive', 'negative');
+                    if (currentValue < totalInvested) {
+                        currentValueElement.classList.add('negative');
+                    }
+
+                    gainLossElement.classList.remove('positive', 'negative');
+                    gainLossElement.classList.add(overallGain >= 0 ? "positive" : "negative");
+
+                    returnPercentElement.classList.remove('positive', 'negative');
+                    returnPercentElement.classList.add(Number(returnPercent) >= 0 ? "positive" : "negative");
+
+                    const tbody = document.querySelector("table tbody");
+                    tbody.innerHTML = "";
+
+                    const formatTableCell = (value) => {
+                        const num = Number(value);
+                        if (isNaN(num)) {
+                            return `<td>--</td>`;
+                        }
+                        const formattedValue = num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                        const className = num < 0 ? 'negative' : '';
+                        return `<td class="${className}">${formattedValue}</td>`;
+                    };
+
+                    filteredData.forEach((row, index) => {
+                        const tr = document.createElement("tr");
+                        tr.innerHTML = `
+                            <td>${row["Month-Year"] || '--'}</td>
+                            ${formatTableCell(valuations[index])}
+                            ${formatTableCell(changes[index])}
+                            ${formatTableCell(monthlyInvestments[index])}
+                            ${formatTableCell(gains[index])}
+                            ${formatTableCell(investments[index])}
+                        `;
+                        tbody.appendChild(tr);
                     });
-                    console.log("Valuation chart created.");
 
-                    new Chart(document.getElementById('gainLossChart'), {
-                      type: 'bar',
-                      data: { labels, datasets: [{ label: 'Monthly Gain/Loss (₹)', data: gains, backgroundColor: gains.map(g => g >= 0 ? 'rgba(40,167,69,0.7)' : 'rgba(220,53,69,0.7)') }] },
-                      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: context => `${context.dataset.label || ''}: ${formatCurrency(context.parsed.y)}` } } }, scales: { y: { beginAtZero: true, ticks: { callback: value => formatCurrency(value) } } } }
-                    });
-                    console.log("Gain/Loss chart created.");
+                    if (window.valuationChartInstance) window.valuationChartInstance.destroy();
+                    if (window.gainLossChartInstance) window.gainLossChartInstance.destroy();
 
-                } catch (chartError) {
-                    console.error("Error creating charts:", chartError);
-                    alert("Charts could not be created. Check console for details.");
+                    try {
+                        window.valuationChartInstance = new Chart(document.getElementById('valuationChart'), {
+                          type: 'line',
+                          data: { labels, datasets: [ { label: 'Portfolio Valuation (₹)', data: valuations, borderColor: '#28a745', backgroundColor: 'rgba(40,167,69,0.2)', tension: 0.3 }, { label: 'Total Investment (₹)', data: investments, borderColor: '#007bff', backgroundColor: 'rgba(0,123,255,0.2)', tension: 0.3 } ] },
+                          options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: context => `${context.dataset.label || ''}: ${formatCurrency(context.parsed.y)}` } } }, scales: { y: { ticks: { callback: value => formatCurrency(value) } } } }
+                        });
+
+                        window.gainLossChartInstance = new Chart(document.getElementById('gainLossChart'), {
+                          type: 'bar',
+                          data: { labels, datasets: [{ label: 'Monthly Gain/Loss (₹)', data: gains, backgroundColor: gains.map(g => g >= 0 ? 'rgba(40,167,69,0.7)' : 'rgba(220,53,69,0.7)') }] },
+                          options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: context => `${context.dataset.label || ''}: ${formatCurrency(context.parsed.y)}` } } }, scales: { y: { beginAtZero: true, ticks: { callback: value => formatCurrency(value) } } } }
+                        });
+
+                    } catch (chartError) {
+                        console.error("Error creating charts:", chartError);
+                        alert("Charts could not be created. Check console for details.");
+                    }
                 }
+
+                renderPortfolioForFY(selectedFY);
+
+                fySelect.addEventListener('change', function() {
+                    selectedFY = this.value;
+                    renderPortfolioForFY(selectedFY);
+                });
 
             })
             .catch(error => {
                 console.error('Fetch or Processing Error:', error);
-                // Display a user-friendly message on the page
                 document.body.innerHTML = `<h1>Error loading portfolio data</h1><p>Could not load or process the portfolio.csv file. Please check the file path, format, and ensure it's accessible. Details logged to console.</p><p>Error: ${error.message}</p>`;
             });
 
@@ -311,3 +345,4 @@
 
 </body>
 </html>
+``` 
